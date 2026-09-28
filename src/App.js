@@ -1,54 +1,97 @@
-import { useState } from "react";
+// ============================================================
+// TODO APP - tổng hợp các Hook phổ biến
+// ------------------------------------------------------------
+//   - useState       : ô input (TodoForm), theme (qua useLocalStorage)
+//   - useEffect      : lưu dữ liệu vào localStorage (trong useLocalStorage + ở dưới)
+//   - useRef         : focus vào ô input (TodoForm)
+//   - useMemo        : đếm số công việc chưa hoàn thành (TodoList)
+//   - useCallback    : tối ưu hàm thêm công việc (addTodo ở dưới)
+//   - useContext     : Dark / Light Mode (context/ThemeContext.js)
+//   - useReducer     : thay thế useState để quản lý danh sách todo
+//   - useLocalStorage: custom hook tái sử dụng logic lưu dữ liệu
+// ============================================================
+
+import { useReducer, useEffect, useCallback, useContext } from "react";
 import "./App.css";
-import DemoState from "./Demostate";
-import DemoEffect from "./DemoEffect";
-import DemoRef from "./DemoRef";
-import DemoContext from "./DemoContext";
-import DemoReducer from "./DemoReducer";
-import DemoMemo from "./DemoMemo";
-import DemoCallback from "./DemoCallback";
-import DemoCustomHook from "./DemoCustomHook";
+import { ThemeContext, ThemeProvider } from "./context/ThemeContext";
+import useLocalStorage from "./hook/useLocalStorage";
+import initialTodos from "./datas/todos";
+import TodoForm from "./components/TodoForm";
+import TodoList from "./components/TodoList";
 
-// Danh sách các demo: tên nút + component tương ứng
-const demos = [
-  { name: "useState", component: <DemoState /> },
-  { name: "useEffect", component: <DemoEffect /> },
-  { name: "useRef", component: <DemoRef /> },
-  { name: "useContext", component: <DemoContext /> },
-  { name: "useReducer", component: <DemoReducer /> },
-  { name: "useMemo", component: <DemoMemo /> },
-  { name: "useCallback", component: <DemoCallback /> },
-  { name: "Custom Hook", component: <DemoCustomHook /> },
-];
+// ---------- Reducer: gom mọi cách thay đổi danh sách todo ----------
+function todoReducer(todos, action) {
+  switch (action.type) {
+    case "ADD":
+      return [
+        ...todos,
+        { id: Date.now(), text: action.payload, completed: false },
+      ];
+    case "TOGGLE":
+      return todos.map((todo) =>
+        todo.id === action.payload
+          ? { ...todo, completed: !todo.completed }
+          : todo
+      );
+    case "DELETE":
+      return todos.filter((todo) => todo.id !== action.payload);
+    default:
+      return todos;
+  }
+}
 
-function App() {
-  // Lưu vị trí demo đang được chọn
-  const [selected, setSelected] = useState(0);
+function TodoApp() {
+  const { theme, colors, toggleTheme } = useContext(ThemeContext);
+
+  // Đọc danh sách đã lưu (lần đầu chưa có thì dùng initialTodos)
+  const [savedTodos, setSavedTodos] = useLocalStorage("todos", initialTodos);
+
+  // useReducer thay cho useState: giá trị ban đầu lấy từ localStorage
+  const [todos, dispatch] = useReducer(todoReducer, savedTodos);
+
+  // Mỗi khi todos thay đổi -> đưa vào useLocalStorage để lưu lại
+  useEffect(() => {
+    setSavedTodos(todos);
+  }, [todos, setSavedTodos]);
+
+  // useCallback: giữ nguyên hàm addTodo giữa các lần render
+  // (dispatch không bao giờ đổi nên mảng phụ thuộc để rỗng)
+  const addTodo = useCallback((text) => {
+    dispatch({ type: "ADD", payload: text });
+  }, []);
+
+  const toggleTodo = (id) => dispatch({ type: "TOGGLE", payload: id });
+  const deleteTodo = (id) => dispatch({ type: "DELETE", payload: id });
 
   return (
-    <div style={{ textAlign: "left" }}>
-      <h1 style={{ marginLeft: 16 }}>Demo React Hooks</h1>
+    <div
+      className="App"
+      style={{
+        minHeight: "100vh",
+        backgroundColor: colors.background,
+        color: colors.color,
+        paddingBottom: 16,
+      }}
+    >
+      <header style={{ padding: 16 }}>
+        <h1 style={{ fontSize: 48, margin: "0 0 16px" }}>React Hooks Demo</h1>
+        <button onClick={toggleTheme} style={{ padding: "4px 16px", fontSize: 16 }}>
+          {theme === "light" ? "🌙 Dark Mode" : "☀️ Light Mode"}
+        </button>
+      </header>
 
-      {/* Các nút chọn demo */}
-      <div style={{ marginLeft: 16 }}>
-        {demos.map((demo, index) => (
-          <button
-            key={demo.name}
-            onClick={() => setSelected(index)}
-            style={{
-              marginRight: 8,
-              marginBottom: 8,
-              fontWeight: selected === index ? "bold" : "normal",
-            }}
-          >
-            {demo.name}
-          </button>
-        ))}
-      </div>
-
-      {/* Hiển thị demo đang chọn */}
-      {demos[selected].component}
+      <TodoForm onAdd={addTodo} />
+      <TodoList todos={todos} onToggle={toggleTodo} onDelete={deleteTodo} />
     </div>
+  );
+}
+
+// Bọc Provider ở ngoài cùng để mọi component bên trong dùng được ThemeContext
+function App() {
+  return (
+    <ThemeProvider>
+      <TodoApp />
+    </ThemeProvider>
   );
 }
 
